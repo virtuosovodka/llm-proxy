@@ -643,10 +643,15 @@ func runServer(yamlConfig *config.YAMLConfig) {
 	// Health check endpoint
 	r.HandleFunc("/health", healthHandler).Methods("GET", "HEAD")
 
-	// Dashboard UI
-	dashHandler := dashboard.NewHandler(globalDashboard, globalProviderManager, globalRateLimiter, yamlConfig)
+	// Dashboard UI with optional token auth
+	dashboardToken := os.Getenv("DASHBOARD_TOKEN")
+	dashHandler := dashboard.NewHandler(globalDashboard, globalProviderManager, globalRateLimiter, yamlConfig, dashboardToken)
 	dashHandler.RegisterRoutes(r)
-	logger.Info("Dashboard available", "url", "http://0.0.0.0:"+port+"/dashboard")
+	dashboardURL := "http://0.0.0.0:" + port + "/dashboard"
+	if dashboardToken != "" {
+		dashboardURL += "?token=" + dashboardToken
+	}
+	logger.Info("Dashboard available", "url", dashboardURL)
 
 	// Register extra routes FIRST (more specific routes before catch-all PathPrefix)
 	for name, provider := range globalProviderManager.GetAllProviders() {
