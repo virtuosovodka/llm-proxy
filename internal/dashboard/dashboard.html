@@ -74,6 +74,92 @@
       border-radius: 4px;
       display: none;
     }
+    .help-button {
+      padding: 6px 12px;
+      background: var(--blue);
+      color: var(--bg);
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity .2s;
+    }
+    .help-button:hover { opacity: .8; }
+
+    /* ── Modal ── */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,.7);
+      z-index: 1000;
+      overflow-y: auto;
+      padding: 40px 20px;
+    }
+    .modal.open { display: block; }
+    .modal-content {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 32px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+    .modal-header h2 { font-size: 20px; font-weight: 600; }
+    .modal-close {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 24px;
+      cursor: pointer;
+      padding: 0;
+      width: 32px; height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-close:hover { color: var(--text); }
+    .help-section { margin-bottom: 28px; }
+    .help-section h3 {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--blue);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+    .help-section p {
+      font-size: 13px;
+      color: var(--text);
+      line-height: 1.6;
+      margin-bottom: 8px;
+    }
+    .help-section ul {
+      font-size: 13px;
+      color: var(--text);
+      margin-left: 20px;
+      line-height: 1.7;
+    }
+    .help-section li { margin-bottom: 6px; }
+    .help-code {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 8px 12px;
+      font-family: monospace;
+      font-size: 12px;
+      color: var(--blue);
+      margin: 8px 0;
+    }
 
     /* ── Layout ── */
     .page { padding: 20px 24px; max-width: 1600px; margin: 0 auto; }
@@ -239,6 +325,7 @@
     <span class="header-tag"><span class="pulse"></span> Live</span>
   </div>
   <div style="display:flex;align-items:center;gap:12px;">
+    <button class="help-button" id="help-btn">❓ Learn</button>
     <span class="error-banner" id="error-banner"></span>
     <span class="last-updated" id="last-updated">Loading…</span>
   </div>
@@ -332,6 +419,93 @@
   </div>
 
   <div style="height:40px;"></div>
+</div>
+
+<!-- ── Help Modal ── -->
+<div class="modal" id="help-modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>Dashboard Guide</h2>
+      <button class="modal-close" id="modal-close">&times;</button>
+    </div>
+
+    <div class="help-section">
+      <h3>🏥 Backend Health</h3>
+      <p>Shows the status of all LLM providers (supercomputer, cloud services, etc.).</p>
+      <ul>
+        <li><strong>Green badge (healthy)</strong> — Backend is responding and available</li>
+        <li><strong>Red badge (unhealthy)</strong> — Backend is down or not responding</li>
+        <li><strong>Primary / FALLBACK</strong> — When primary is down, requests automatically use fallback (cloud)</li>
+        <li><strong>Latency (ms)</strong> — Response time in milliseconds. High latency may trigger failover</li>
+      </ul>
+    </div>
+
+    <div class="help-section">
+      <h3>📊 Overview Cards</h3>
+      <ul>
+        <li><strong>Total Requests</strong> — All requests since the proxy started</li>
+        <li><strong>Total Tokens</strong> — Combined input + output tokens across all requests</li>
+        <li><strong>Uptime</strong> — How long the proxy has been running</li>
+      </ul>
+    </div>
+
+    <div class="help-section">
+      <h3>📈 Request Rate Chart</h3>
+      <p>Shows requests per minute over the last 10 minutes. Spikes indicate high usage.</p>
+    </div>
+
+    <div class="help-section">
+      <h3>📋 Usage by Model</h3>
+      <p>Breaks down requests and tokens by LLM model. Helps identify which models are being used most.</p>
+      <ul>
+        <li><strong>Total Req</strong> — All-time request count for this model</li>
+        <li><strong>Input Tokens</strong> — Tokens sent to the model (what you ask)</li>
+        <li><strong>Output Tokens</strong> — Tokens from the model (what it responds)</li>
+        <li><strong>Req/min, Req/hr, Req/day</strong> — Recent activity in different time windows</li>
+      </ul>
+    </div>
+
+    <div class="help-section">
+      <h3>⏱️ Recent Requests</h3>
+      <p>Last 20 API calls made through the proxy.</p>
+      <ul>
+        <li><strong>Mode: "stream" vs "sync"</strong> — Streaming means the response comes back in chunks; sync waits for the full response</li>
+        <li><strong>Finish</strong> — Why the model stopped (e.g., "stop" = completed normally, "length" = hit token limit)</li>
+        <li><strong>User</strong> — Who made the request (if tracked)</li>
+      </ul>
+    </div>
+
+    <div class="help-section">
+      <h3>🚦 Rate Limits</h3>
+      <p>Shows current usage against configured limits. Prevents excessive spending.</p>
+      <ul>
+        <li><strong>Requests / minute</strong> — How many API calls per minute (green = safe, red = approaching limit)</li>
+        <li><strong>Tokens / minute</strong> — Total tokens (input + output) per minute</li>
+        <li><strong>Requests / day, Tokens / day</strong> — Daily budgets</li>
+      </ul>
+      <p style="margin-top: 12px; color: var(--muted); font-size: 12px;">If any bar reaches 100%, new requests will be rejected until the window resets.</p>
+    </div>
+
+    <div class="help-section">
+      <h3>🔄 Failover & Supercomputer Integration</h3>
+      <p>This proxy connects your supercomputer (primary) to cloud services (fallback):</p>
+      <ul>
+        <li>Normal operation: requests use supercomputer (fast, free)</li>
+        <li>Supercomputer down or overloaded → automatically switches to cloud (Fireworks, Bedrock)</li>
+        <li>Look for "FALLBACK" badges in Backend Health to see when this happens</li>
+      </ul>
+    </div>
+
+    <div class="help-section">
+      <h3>❓ Common Questions</h3>
+      <ul>
+        <li><strong>Why did it switch to FALLBACK?</strong> — Supercomputer was either down, too slow, or queue was full</li>
+        <li><strong>What are input vs output tokens?</strong> — Input = your question, Output = the AI's answer. Costs are usually higher for output</li>
+        <li><strong>Should I worry about high latency?</strong> — Latency > 5000ms (5 sec) triggers failover. See the config for exact thresholds</li>
+        <li><strong>Why does the dashboard refresh every 5 seconds?</strong> — Updates in real-time so you can see what's happening now</li>
+      </ul>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -607,6 +781,32 @@ async function poll() {
 
 poll();
 setInterval(poll, 5000);
+
+// ── Help modal ──────────────────────────────────────────────────────────────
+const helpBtn = document.getElementById('help-btn');
+const helpModal = document.getElementById('help-modal');
+const modalClose = document.getElementById('modal-close');
+
+helpBtn.addEventListener('click', () => {
+  helpModal.classList.add('open');
+});
+
+modalClose.addEventListener('click', () => {
+  helpModal.classList.remove('open');
+});
+
+helpModal.addEventListener('click', (e) => {
+  if (e.target === helpModal) {
+    helpModal.classList.remove('open');
+  }
+});
+
+// Close modal on Escape key
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && helpModal.classList.contains('open')) {
+    helpModal.classList.remove('open');
+  }
+});
 </script>
 </body>
 </html>
