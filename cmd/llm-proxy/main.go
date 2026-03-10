@@ -17,6 +17,7 @@ import (
 	"github.com/Instawork/llm-proxy/internal/apikeys"
 	"github.com/Instawork/llm-proxy/internal/config"
 	"github.com/Instawork/llm-proxy/internal/cost"
+	"github.com/Instawork/llm-proxy/internal/dashboard"
 	"github.com/Instawork/llm-proxy/internal/middleware"
 	"github.com/Instawork/llm-proxy/internal/providers"
 	"github.com/Instawork/llm-proxy/internal/ratelimit"
@@ -612,6 +613,9 @@ func runServer(yamlConfig *config.YAMLConfig) {
 	}
 	r.Use(middleware.CORSMiddleware(globalProviderManager))
 
+	// Create dashboard stats collector
+	globalDashboard := dashboard.NewStatsCollector()
+
 	// Create callbacks for cost tracking
 	var callbacks []middleware.MetadataCallback
 
@@ -630,11 +634,19 @@ func runServer(yamlConfig *config.YAMLConfig) {
 		callbacks = append(callbacks, costTrackingCallback)
 	}
 
+	// Add dashboard stats callback
+	callbacks = append(callbacks, globalDashboard.Callback(globalProviderManager))
+
 	r.Use(middleware.TokenParsingMiddleware(globalProviderManager, callbacks...)) // Add token parsing middleware with callbacks
 	r.Use(middleware.StreamingMiddleware(globalProviderManager))
 
 	// Health check endpoint
 	r.HandleFunc("/health", healthHandler).Methods("GET", "HEAD")
+
+	// Dashboard UI
+	dashHandler := dashboard.NewHandler(globalDashboard, globalProviderManager, globalRateLimiter, yamlConfig)
+	dashHandler.RegisterRoutes(r)
+	logger.Info("Dashboard available", "url", "http://0.0.0.0:"+port+"/dashboard")
 
 	// Register extra routes FIRST (more specific routes before catch-all PathPrefix)
 	for name, provider := range globalProviderManager.GetAllProviders() {

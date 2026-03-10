@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LLM Proxy Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0d1117;
+      --surface:  #161b22;
+      --border:   #21262d;
+      --text:     #e6edf3;
+      --muted:    #8b949e;
+      --green:    #3fb950;
+      --green-bg: #0d2116;
+      --red:      #f85149;
+      --red-bg:   #2d1114;
+      --yellow:   #e3b341;
+      --yellow-bg:#2b2006;
+      --blue:     #58a6ff;
+      --purple:   #bc8cff;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    /* ── Header ── */
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 24px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    .header-left { display: flex; align-items: center; gap: 12px; }
+    .header h1 { font-size: 16px; font-weight: 600; }
+    .header-tag {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      background: var(--green-bg);
+      color: var(--green);
+      border: 1px solid rgba(63,185,80,.3);
+    }
+    .pulse {
+      display: inline-block;
+      width: 8px; height: 8px;
+      background: var(--green);
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%,100% { opacity: 1; transform: scale(1); }
+      50%      { opacity: .4; transform: scale(.8); }
+    }
+    .last-updated { font-size: 12px; color: var(--muted); }
+    .error-banner {
+      font-size: 12px;
+      color: var(--red);
+      padding: 2px 8px;
+      background: var(--red-bg);
+      border-radius: 4px;
+      display: none;
+    }
+
+    /* ── Layout ── */
+    .page { padding: 20px 24px; max-width: 1600px; margin: 0 auto; }
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin: 24px 0 12px;
+    }
+    .section-title:first-child { margin-top: 0; }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .card-title {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin-bottom: 8px;
+    }
+    .card-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ── Grid layouts ── */
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+    .grid-auto {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 12px;
+    }
+    @media (max-width: 768px) {
+      .grid-3 { grid-template-columns: 1fr; }
+    }
+
+    /* ── Health cards ── */
+    .health-card { position: relative; }
+    .health-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .health-name { font-weight: 600; font-size: 14px; }
+    .badge {
+      font-size: 11px;
+      font-weight: 500;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+    .badge-green { background: var(--green-bg); color: var(--green); }
+    .badge-red   { background: var(--red-bg);   color: var(--red);   }
+    .badge-yellow{ background: var(--yellow-bg); color: var(--yellow);}
+    .badge-blue  { background: #0d2b4e;          color: var(--blue);  }
+
+    .health-detail {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 6px;
+      padding-top: 6px;
+      border-top: 1px solid var(--border);
+    }
+    .health-detail-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 4px;
+      gap: 8px;
+    }
+    .health-detail-label { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+    .endpoint-url { font-family: monospace; font-size: 11px; }
+
+    /* ── Chart ── */
+    .chart-card { padding: 20px; }
+    .chart-wrap { position: relative; height: 180px; }
+
+    /* ── Tables ── */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th {
+      text-align: left;
+      padding: 8px 12px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    td {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+      white-space: nowrap;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,.02); }
+    .td-muted { color: var(--muted); font-size: 12px; }
+    .td-mono  { font-family: monospace; font-size: 12px; }
+    .td-num   { text-align: right; font-variant-numeric: tabular-nums; }
+    .td-trunc { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+
+    /* ── Rate limit bars ── */
+    .rl-row { margin-bottom: 14px; }
+    .rl-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .rl-track {
+      height: 8px;
+      background: var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .rl-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width .4s ease;
+    }
+    .rl-fill-low    { background: var(--blue); }
+    .rl-fill-medium { background: var(--yellow); }
+    .rl-fill-high   { background: var(--red); }
+
+    /* ── Empty state ── */
+    .empty {
+      text-align: center;
+      padding: 32px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    /* ── Misc ── */
+    code { font-family: monospace; font-size: 12px; }
+    .tag-stream { font-size: 11px; padding: 1px 6px; border-radius: 3px; background: var(--yellow-bg); color: var(--yellow); }
+    .tag-sync   { font-size: 11px; padding: 1px 6px; border-radius: 3px; background: var(--border); color: var(--muted); }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header class="header">
+  <div class="header-left">
+    <h1>LLM Proxy</h1>
+    <span class="header-tag"><span class="pulse"></span> Live</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <span class="error-banner" id="error-banner"></span>
+    <span class="last-updated" id="last-updated">Loading…</span>
+  </div>
+</header>
+
+<div class="page">
+
+  <!-- ── Summary stats ── -->
+  <div class="section-title">Overview</div>
+  <div class="grid-3">
+    <div class="card">
+      <div class="card-title">Total Requests</div>
+      <div class="card-value" id="stat-requests">—</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Total Tokens</div>
+      <div class="card-value" id="stat-tokens">—</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Uptime</div>
+      <div class="card-value" id="stat-uptime">—</div>
+    </div>
+  </div>
+
+  <!-- ── Backend health ── -->
+  <div class="section-title">Backend Health</div>
+  <div class="grid-auto" id="health-grid">
+    <div class="empty">Loading…</div>
+  </div>
+
+  <!-- ── Request rate chart ── -->
+  <div class="section-title">Request Rate</div>
+  <div class="card chart-card">
+    <div class="chart-wrap">
+      <canvas id="rate-chart"></canvas>
+    </div>
+  </div>
+
+  <!-- ── Model usage table ── -->
+  <div class="section-title">Usage by Model</div>
+  <div class="card">
+    <div class="table-wrap">
+      <table id="model-table">
+        <thead>
+          <tr>
+            <th>Provider</th>
+            <th>Model</th>
+            <th class="td-num">Total Req</th>
+            <th class="td-num">Input Tokens</th>
+            <th class="td-num">Output Tokens</th>
+            <th class="td-num">Req/min</th>
+            <th class="td-num">Req/hr</th>
+            <th class="td-num">Req/day</th>
+          </tr>
+        </thead>
+        <tbody id="model-tbody">
+          <tr><td colspan="8" class="empty">No data yet</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Recent requests ── -->
+  <div class="section-title">Recent Requests</div>
+  <div class="card">
+    <div class="table-wrap">
+      <table id="recent-table">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Provider</th>
+            <th>Model</th>
+            <th class="td-num">In Tokens</th>
+            <th class="td-num">Out Tokens</th>
+            <th>Mode</th>
+            <th>Finish</th>
+            <th>User</th>
+          </tr>
+        </thead>
+        <tbody id="recent-tbody">
+          <tr><td colspan="8" class="empty">No requests yet</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Rate limit (hidden when disabled) ── -->
+  <div id="ratelimit-section" style="display:none;">
+    <div class="section-title">Rate Limits</div>
+    <div class="card" id="ratelimit-content"></div>
+  </div>
+
+  <div style="height:40px;"></div>
+</div>
+
+<script>
+// ── Chart setup ────────────────────────────────────────────────────────────
+const rateCtx = document.getElementById('rate-chart').getContext('2d');
+const chartColors = {
+  line:  '#58a6ff',
+  fill:  'rgba(88,166,255,0.08)',
+  grid:  '#21262d',
+  tick:  '#8b949e',
+};
+const rateChart = new Chart(rateCtx, {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [{
+      label: 'Requests/min',
+      data: [],
+      borderColor: chartColors.line,
+      backgroundColor: chartColors.fill,
+      fill: true,
+      tension: 0.35,
+      pointRadius: 4,
+      pointBackgroundColor: chartColors.line,
+      pointBorderColor: '#161b22',
+      pointBorderWidth: 2,
+      borderWidth: 2,
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: { duration: 300 },
+    scales: {
+      x: {
+        ticks: { color: chartColors.tick, font: { size: 11 } },
+        grid:  { color: chartColors.grid },
+      },
+      y: {
+        beginAtZero: true,
+        ticks: { color: chartColors.tick, font: { size: 11 }, precision: 0 },
+        grid:  { color: chartColors.grid },
+      },
+    },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#1c2128',
+        borderColor: '#30363d',
+        borderWidth: 1,
+        titleColor: '#e6edf3',
+        bodyColor: '#8b949e',
+        callbacks: {
+          label: ctx => ` ${ctx.parsed.y} requests`,
+        }
+      }
+    },
+  }
+});
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function badge(status) {
+  if (status === 'healthy') return '<span class="badge badge-green">healthy</span>';
+  if (status === 'degraded') return '<span class="badge badge-yellow">degraded</span>';
+  return '<span class="badge badge-red">' + (status || 'unknown') + '</span>';
+}
+
+function fmtNum(n) {
+  if (n == null) return '—';
+  return Number(n).toLocaleString();
+}
+
+function fmtUptime(s) {
+  s = Math.floor(s);
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h ${m}m`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m ${s % 60}s`;
+}
+
+function esc(s) {
+  return String(s || '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+
+// ── Render: health cards ────────────────────────────────────────────────────
+function renderHealth(providerHealth) {
+  const grid = document.getElementById('health-grid');
+  if (!providerHealth || Object.keys(providerHealth).length === 0) {
+    grid.innerHTML = '<div class="empty">No providers configured</div>';
+    return;
+  }
+
+  let html = '';
+  for (const [name, info] of Object.entries(providerHealth)) {
+    let details = '';
+
+    // Multi-provider: per-model failover status
+    if (info.models && typeof info.models === 'object') {
+      for (const [model, ms] of Object.entries(info.models)) {
+        const target = ms.current_target || '';
+        const isFallback = target.includes('fallback');
+        const latency = ms.primary_latency_ms != null ? `${ms.primary_latency_ms}ms` : '';
+        details += `<div class="health-detail-row">
+          <span class="health-detail-label" title="${esc(model)}">${esc(model)}</span>
+          ${isFallback
+            ? '<span class="badge badge-yellow">FALLBACK</span>'
+            : '<span class="badge badge-blue">primary</span>'}
+          ${latency ? `<span class="td-muted">${esc(latency)}</span>` : ''}
+        </div>`;
+        if (ms.consecutive_fails > 0) {
+          details += `<div class="health-detail-row">
+            <span class="td-muted" style="font-size:11px;">${ms.consecutive_fails} consecutive fail(s)</span>
+          </div>`;
+        }
+      }
+    }
+
+    // Local LLM: per-endpoint status
+    if (Array.isArray(info.endpoints) && info.endpoints.length > 0) {
+      for (const ep of info.endpoints) {
+        const isOk = ep.status === 'healthy';
+        details += `<div class="health-detail-row">
+          <span class="health-detail-label endpoint-url" title="${esc(ep.url)}">${esc(ep.url)}</span>
+          ${badge(ep.status)}
+          ${ep.response_time ? `<span class="td-muted" style="font-size:11px;">${esc(ep.response_time)}</span>` : ''}
+        </div>`;
+      }
+    }
+
+    // Web search indicator for cc provider
+    if (info.web_search === 'enabled' || (info.features && info.features.web_search)) {
+      details += `<div class="health-detail-row">
+        <span class="td-muted" style="font-size:11px;">⚡ web search enabled</span>
+      </div>`;
+    }
+
+    // Available models for cc provider
+    if (Array.isArray(info.available_models) && info.available_models.length > 0) {
+      details += `<div class="health-detail-row" style="flex-wrap:wrap;gap:4px;">
+        ${info.available_models.map(m => `<span class="badge badge-blue" style="font-size:10px;">${esc(m)}</span>`).join('')}
+      </div>`;
+    }
+
+    html += `<div class="card health-card">
+      <div class="health-header">
+        <span class="health-name">${esc(name)}</span>
+        ${badge(info.status)}
+      </div>
+      ${details ? `<div class="health-detail">${details}</div>` : ''}
+    </div>`;
+  }
+  grid.innerHTML = html;
+}
+
+// ── Render: summary cards ───────────────────────────────────────────────────
+function renderSummary(snap) {
+  document.getElementById('stat-requests').textContent = fmtNum(snap.total_requests);
+  document.getElementById('stat-tokens').textContent   = fmtNum(snap.total_tokens);
+  document.getElementById('stat-uptime').textContent   = fmtUptime(snap.uptime_seconds || 0);
+}
+
+// ── Render: chart ───────────────────────────────────────────────────────────
+function renderChart(buckets) {
+  if (!buckets || buckets.length === 0) return;
+  rateChart.data.labels                  = buckets.map(b => b.label);
+  rateChart.data.datasets[0].data        = buckets.map(b => b.requests);
+  rateChart.update('none');
+}
+
+// ── Render: model table ─────────────────────────────────────────────────────
+function renderModels(perModel) {
+  const tbody = document.getElementById('model-tbody');
+  if (!perModel || perModel.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty">No model data yet</td></tr>';
+    return;
+  }
+  tbody.innerHTML = perModel.map(m => `<tr>
+    <td class="td-muted">${esc(m.provider)}</td>
+    <td>${esc(m.model)}</td>
+    <td class="td-num">${fmtNum(m.requests_total)}</td>
+    <td class="td-num td-muted">${fmtNum(m.input_tokens)}</td>
+    <td class="td-num td-muted">${fmtNum(m.output_tokens)}</td>
+    <td class="td-num">${m.requests_1m || 0}</td>
+    <td class="td-num">${m.requests_1h || 0}</td>
+    <td class="td-num">${m.requests_24h || 0}</td>
+  </tr>`).join('');
+}
+
+// ── Render: recent requests ─────────────────────────────────────────────────
+function renderRecent(requests) {
+  const tbody = document.getElementById('recent-tbody');
+  if (!requests || requests.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty">No requests yet</td></tr>';
+    return;
+  }
+  tbody.innerHTML = requests.map(r => {
+    const t = new Date(r.timestamp);
+    const timeStr = t.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+    const modeTag = r.is_streaming
+      ? '<span class="tag-stream">stream</span>'
+      : '<span class="tag-sync">sync</span>';
+    const finish = r.finish_reason || '—';
+    const user = r.user_id || r.ip_address || '—';
+    return `<tr>
+      <td class="td-mono">${timeStr}</td>
+      <td class="td-muted">${esc(r.provider)}</td>
+      <td class="td-trunc" title="${esc(r.model)}">${esc(r.model)}</td>
+      <td class="td-num">${fmtNum(r.input_tokens)}</td>
+      <td class="td-num">${fmtNum(r.output_tokens)}</td>
+      <td>${modeTag}</td>
+      <td class="td-muted">${esc(finish)}</td>
+      <td class="td-muted td-trunc" title="${esc(user)}">${esc(user)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Render: rate limits ─────────────────────────────────────────────────────
+function renderRateLimit(rl) {
+  const section = document.getElementById('ratelimit-section');
+  if (!rl) { section.style.display = 'none'; return; }
+  section.style.display = '';
+
+  function bar(val, max, label) {
+    if (max <= 0) return '';
+    const pct = Math.min(100, Math.round(val / max * 100));
+    const cls = pct >= 80 ? 'rl-fill-high' : pct >= 50 ? 'rl-fill-medium' : 'rl-fill-low';
+    return `<div class="rl-row">
+      <div class="rl-label">
+        <span>${label}</span>
+        <span>${fmtNum(val)} / ${fmtNum(max)} (${pct}%)</span>
+      </div>
+      <div class="rl-track">
+        <div class="rl-fill ${cls}" style="width:${pct}%"></div>
+      </div>
+    </div>`;
+  }
+
+  document.getElementById('ratelimit-content').innerHTML =
+    bar(rl.global_minute_requests, rl.configured_rpm, 'Requests / minute') +
+    bar(rl.global_minute_tokens,   rl.configured_tpm, 'Tokens / minute')   +
+    bar(rl.global_day_requests,    rl.configured_rpd, 'Requests / day')    +
+    bar(rl.global_day_tokens,      rl.configured_tpd, 'Tokens / day')      ||
+    '<div class="td-muted" style="font-size:13px;padding:8px 0;">Rate limiting is enabled but no limits are configured.</div>';
+}
+
+// ── Polling ─────────────────────────────────────────────────────────────────
+async function poll() {
+  try {
+    const res = await fetch('/dashboard/api/stats');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const snap = await res.json();
+
+    renderHealth(snap.provider_health || {});
+    renderSummary(snap);
+    renderChart(snap.request_rate || []);
+    renderModels(snap.per_model || []);
+    renderRecent(snap.recent_requests || []);
+    renderRateLimit(snap.rate_limit || null);
+
+    const t = new Date(snap.generated_at).toLocaleTimeString();
+    document.getElementById('last-updated').textContent = `Updated ${t}`;
+    document.getElementById('error-banner').style.display = 'none';
+  } catch (e) {
+    document.getElementById('error-banner').textContent = e.message;
+    document.getElementById('error-banner').style.display = '';
+    document.getElementById('last-updated').textContent = 'Failed to load';
+  }
+}
+
+poll();
+setInterval(poll, 5000);
+</script>
+</body>
+</html>
