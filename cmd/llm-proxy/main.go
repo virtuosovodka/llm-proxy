@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Instawork/llm-proxy/internal/admin"
 	"github.com/Instawork/llm-proxy/internal/apikeys"
 	"github.com/Instawork/llm-proxy/internal/config"
 	"github.com/Instawork/llm-proxy/internal/cost"
@@ -652,6 +653,23 @@ func runServer(yamlConfig *config.YAMLConfig) {
 		dashboardURL += "?token=" + dashboardToken
 	}
 	logger.Info("Dashboard available", "url", dashboardURL)
+
+	// Admin interface for API key management (only if API key store is enabled)
+	if globalAPIKeyStore != nil {
+		adminToken := os.Getenv("ADMIN_TOKEN")
+		// Type assert to the concrete store implementation
+		if adminStore, ok := globalAPIKeyStore.(admin.AdminKeyStore); ok {
+			adminHandler := admin.NewHandler(adminStore, adminToken)
+			adminHandler.RegisterRoutes(r)
+			adminURL := "http://0.0.0.0:" + port + "/admin"
+			if adminToken != "" {
+				adminURL += "?token=" + adminToken
+			}
+			logger.Info("Admin interface available", "url", adminURL)
+		} else {
+			logger.Warn("Admin interface: API key store does not support admin operations")
+		}
+	}
 
 	// Register extra routes FIRST (more specific routes before catch-all PathPrefix)
 	for name, provider := range globalProviderManager.GetAllProviders() {

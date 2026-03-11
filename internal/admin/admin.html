@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LLM Proxy - Key Management</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0d1117;
+      --surface:  #161b22;
+      --border:   #21262d;
+      --text:     #e6edf3;
+      --muted:    #8b949e;
+      --green:    #3fb950;
+      --green-bg: #0d2116;
+      --red:      #f85149;
+      --red-bg:   #2d1114;
+      --blue:     #58a6ff;
+      --yellow:   #e3b341;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 24px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    .header h1 { font-size: 16px; font-weight: 600; }
+    .error-banner {
+      font-size: 12px;
+      color: var(--red);
+      padding: 2px 8px;
+      background: var(--red-bg);
+      border-radius: 4px;
+      display: none;
+    }
+
+    .page { padding: 20px 24px; max-width: 1200px; margin: 0 auto; }
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin: 24px 0 12px;
+    }
+    .section-title:first-child { margin-top: 0; }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    /* Form */
+    .form-group { margin-bottom: 16px; }
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin-bottom: 6px;
+    }
+    input, select, textarea {
+      width: 100%;
+      padding: 8px 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 14px;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(88,166,255,.1);
+    }
+    textarea { resize: vertical; min-height: 100px; }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    button {
+      padding: 8px 16px;
+      background: var(--blue);
+      color: var(--bg);
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity .2s;
+    }
+    button:hover { opacity: .8; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    button.secondary {
+      background: var(--border);
+      color: var(--text);
+    }
+    button.danger { background: var(--red); }
+
+    /* Table */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th {
+      text-align: left;
+      padding: 8px 12px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    td {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+      white-space: nowrap;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,.02); }
+
+    .td-muted { color: var(--muted); font-size: 12px; }
+    .td-mono { font-family: monospace; font-size: 12px; }
+    .td-status { font-weight: 600; }
+    .status-enabled { color: var(--green); }
+    .status-disabled { color: var(--muted); }
+
+    .btn-group {
+      display: flex;
+      gap: 4px;
+    }
+    .btn-small {
+      padding: 4px 8px;
+      font-size: 11px;
+      background: var(--border);
+      color: var(--text);
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .btn-small:hover { background: #30363d; }
+
+    /* Modal */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,.7);
+      z-index: 1000;
+      overflow-y: auto;
+      padding: 40px 20px;
+    }
+    .modal.open { display: flex; align-items: center; justify-content: center; }
+    .modal-content {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      max-width: 500px;
+      width: 100%;
+      padding: 32px;
+    }
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+    .modal-header h2 { font-size: 18px; font-weight: 600; }
+    .modal-close {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 24px;
+      cursor: pointer;
+      padding: 0;
+      width: 32px; height: 32px;
+    }
+    .modal-close:hover { color: var(--text); }
+
+    .badge {
+      font-size: 11px;
+      font-weight: 500;
+      padding: 2px 8px;
+      border-radius: 4px;
+      display: inline-block;
+    }
+    .badge-openai { background: #0d2116; color: var(--green); }
+    .badge-anthropic { background: #0d1f4a; color: var(--blue); }
+    .badge-gemini { background: #3d2b0a; color: var(--yellow); }
+
+    .empty {
+      text-align: center;
+      padding: 32px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .success { color: var(--green); }
+    .error { color: var(--red); }
+  </style>
+</head>
+<body>
+
+<header class="header">
+  <h1>🔑 API Key Management</h1>
+  <span class="error-banner" id="error-banner"></span>
+</header>
+
+<div class="page">
+
+  <!-- Create Key Form -->
+  <div class="section-title">Create New Key</div>
+  <div class="card">
+    <form id="create-form">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Provider *</label>
+          <select id="provider" required>
+            <option value="">-- Select Provider --</option>
+            <option value="openai">OpenAI</option>
+            <option value="anthropic">Anthropic</option>
+            <option value="gemini">Gemini</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Daily Cost Limit (cents)</label>
+          <input type="number" id="daily-limit" value="10000" placeholder="10000 = $100">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>API Key *</label>
+        <textarea id="actual-key" placeholder="Paste the real API key here" required></textarea>
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <input type="text" id="description" placeholder="e.g., Team A Research Key">
+      </div>
+      <div class="form-group">
+        <label>Expiration Date (optional)</label>
+        <input type="date" id="expires-at">
+      </div>
+      <div class="form-group">
+        <label>Tags (one per line, format: key=value)</label>
+        <textarea id="tags" placeholder="team=research&#10;project=llm"></textarea>
+      </div>
+      <button type="submit">Create Key</button>
+    </form>
+  </div>
+
+  <!-- Keys List -->
+  <div class="section-title">All Keys</div>
+  <div class="card">
+    <div class="table-wrap">
+      <table id="keys-table">
+        <thead>
+          <tr>
+            <th>Provider</th>
+            <th>Key ID</th>
+            <th>Description</th>
+            <th>Daily Limit</th>
+            <th>Status</th>
+            <th>Created</th>
+            <th>Expires</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="keys-tbody">
+          <tr><td colspan="8" class="empty">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div style="height:40px;"></div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal" id="edit-modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>Edit Key</h2>
+      <button class="modal-close" id="modal-close">&times;</button>
+    </div>
+    <form id="edit-form">
+      <input type="hidden" id="edit-id">
+      <div class="form-group">
+        <label>Description</label>
+        <input type="text" id="edit-description" placeholder="e.g., Team A Research Key">
+      </div>
+      <div class="form-group">
+        <label>Daily Cost Limit (cents)</label>
+        <input type="number" id="edit-daily-limit" placeholder="10000 = $100">
+      </div>
+      <div class="form-group">
+        <label>Expiration Date (optional)</label>
+        <input type="date" id="edit-expires-at">
+      </div>
+      <div class="form-group">
+        <label>Tags (one per line, format: key=value)</label>
+        <textarea id="edit-tags" placeholder="team=research&#10;project=llm"></textarea>
+      </div>
+      <div class="form-group">
+        <label>
+          <input type="checkbox" id="edit-enabled"> Enable this key
+        </label>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button type="submit">Save Changes</button>
+        <button type="button" class="secondary" id="close-edit">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+const token = new URLSearchParams(window.location.search).get('token') || '';
+
+// ── Fetch token from form or query param ────────────────────────────────────
+function apiCall(method, endpoint, body) {
+  const url = new URL(endpoint, window.location.origin);
+  if (token && method === 'GET') {
+    url.searchParams.set('token', token);
+  }
+  const opts = {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    }
+  };
+  if (body) opts.body = JSON.stringify(body);
+  return fetch(url, opts);
+}
+
+// ── Helper: format date ─────────────────────────────────────────────────────
+function formatDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleDateString([], {year:'2-digit', month:'2-digit', day:'2-digit'});
+}
+
+function formatProvider(p) {
+  const badges = { openai: 'badge-openai', anthropic: 'badge-anthropic', gemini: 'badge-gemini' };
+  return `<span class="badge ${badges[p] || ''}">${p}</span>`;
+}
+
+function formatStatus(enabled) {
+  return `<span class="td-status ${enabled ? 'status-enabled' : 'status-disabled'}">
+    ${enabled ? '✓ Enabled' : '✗ Disabled'}
+  </span>`;
+}
+
+function parseTagsFromText(text) {
+  if (!text) return {};
+  const obj = {};
+  text.split('\n').forEach(line => {
+    const [k, v] = line.split('=');
+    if (k && v) obj[k.trim()] = v.trim();
+  });
+  return obj;
+}
+
+function tagsToText(tags) {
+  if (!tags || Object.keys(tags).length === 0) return '';
+  return Object.entries(tags).map(([k, v]) => `${k}=${v}`).join('\n');
+}
+
+// ── Load and render keys ────────────────────────────────────────────────────
+async function loadKeys() {
+  const tbody = document.getElementById('keys-tbody');
+  try {
+    const res = await apiCall('GET', '/admin/api/keys');
+    if (!res.ok) {
+      if (res.status === 401) {
+        showError('Unauthorized. Check your token.');
+      } else {
+        showError(`Error: ${res.status}`);
+      }
+      tbody.innerHTML = `<tr><td colspan="8" class="error">Failed to load keys</td></tr>`;
+      return;
+    }
+    const data = await res.json();
+    const keys = data.keys || [];
+
+    if (keys.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="8" class="empty">No keys yet</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = keys.map(k => `
+      <tr>
+        <td>${formatProvider(k.provider)}</td>
+        <td class="td-mono" title="${k.pk}">${k.pk.substring(0, 12)}...</td>
+        <td>${k.description || '—'}</td>
+        <td>$${(k.daily_cost_limit / 100).toFixed(2)}</td>
+        <td>${formatStatus(k.enabled)}</td>
+        <td class="td-muted">${formatDate(k.created_at)}</td>
+        <td class="td-muted">${k.expires_at ? formatDate(k.expires_at) : '—'}</td>
+        <td>
+          <div class="btn-group">
+            <button class="btn-small" onclick="editKey('${k.pk}')">Edit</button>
+            <button class="btn-small danger" onclick="deleteKey('${k.pk}')">Delete</button>
+          </div>
+        </td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    console.error(e);
+    showError('Failed to load keys: ' + e.message);
+    tbody.innerHTML = `<tr><td colspan="8" class="error">Error loading keys</td></tr>`;
+  }
+}
+
+// ── Create key ──────────────────────────────────────────────────────────────
+document.getElementById('create-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = e.target.querySelector('button');
+  btn.disabled = true;
+
+  try {
+    const body = {
+      provider: document.getElementById('provider').value,
+      actual_key: document.getElementById('actual-key').value,
+      description: document.getElementById('description').value,
+      daily_cost_limit: parseInt(document.getElementById('daily-limit').value || '10000'),
+      expires_at: document.getElementById('expires-at').value ? new Date(document.getElementById('expires-at').value).toISOString() : null,
+      tags: parseTagsFromText(document.getElementById('tags').value)
+    };
+
+    const res = await apiCall('POST', '/admin/api/keys', body);
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+
+    showSuccess('Key created!');
+    document.getElementById('create-form').reset();
+    loadKeys();
+  } catch (e) {
+    showError('Failed to create key: ' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ── Edit key ────────────────────────────────────────────────────────────────
+async function editKey(pk) {
+  const res = await apiCall('GET', `/admin/api/keys/${pk}`);
+  if (!res.ok) {
+    showError('Failed to load key');
+    return;
+  }
+  const key = await res.json();
+
+  document.getElementById('edit-id').value = pk;
+  document.getElementById('edit-description').value = key.description || '';
+  document.getElementById('edit-daily-limit').value = key.daily_cost_limit;
+  document.getElementById('edit-expires-at').value = key.expires_at ? key.expires_at.split('T')[0] : '';
+  document.getElementById('edit-tags').value = tagsToText(key.tags);
+  document.getElementById('edit-enabled').checked = key.enabled;
+
+  document.getElementById('edit-modal').classList.add('open');
+}
+
+document.getElementById('edit-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const pk = document.getElementById('edit-id').value;
+  const btn = e.target.querySelector('button[type="submit"]');
+  btn.disabled = true;
+
+  try {
+    const body = {
+      description: document.getElementById('edit-description').value,
+      daily_cost_limit: parseInt(document.getElementById('edit-daily-limit').value || '10000'),
+      expires_at: document.getElementById('edit-expires-at').value ? new Date(document.getElementById('edit-expires-at').value).toISOString() : null,
+      enabled: document.getElementById('edit-enabled').checked,
+      tags: parseTagsFromText(document.getElementById('edit-tags').value)
+    };
+
+    const res = await apiCall('PUT', `/admin/api/keys/${pk}`, body);
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+
+    showSuccess('Key updated!');
+    document.getElementById('edit-modal').classList.remove('open');
+    loadKeys();
+  } catch (e) {
+    showError('Failed to update key: ' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ── Delete key ──────────────────────────────────────────────────────────────
+async function deleteKey(pk) {
+  if (!confirm('Are you sure you want to delete this key?')) return;
+
+  try {
+    const res = await apiCall('DELETE', `/admin/api/keys/${pk}`);
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    showSuccess('Key deleted!');
+    loadKeys();
+  } catch (e) {
+    showError('Failed to delete key: ' + e.message);
+  }
+}
+
+// ── Modal close ─────────────────────────────────────────────────────────────
+document.getElementById('modal-close').addEventListener('click', () => {
+  document.getElementById('edit-modal').classList.remove('open');
+});
+document.getElementById('close-edit').addEventListener('click', () => {
+  document.getElementById('edit-modal').classList.remove('open');
+});
+document.getElementById('edit-modal').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('edit-modal')) {
+    document.getElementById('edit-modal').classList.remove('open');
+  }
+});
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+function showError(msg) {
+  const banner = document.getElementById('error-banner');
+  banner.textContent = msg;
+  banner.style.display = '';
+  setTimeout(() => { banner.style.display = 'none'; }, 5000);
+}
+
+function showSuccess(msg) {
+  const banner = document.getElementById('error-banner');
+  banner.textContent = msg;
+  banner.style.display = '';
+  banner.style.color = 'var(--green)';
+  banner.style.background = 'var(--green-bg)';
+  setTimeout(() => {
+    banner.style.display = 'none';
+    banner.style.color = 'var(--red)';
+    banner.style.background = 'var(--red-bg)';
+  }, 3000);
+}
+
+// ── Initialize ──────────────────────────────────────────────────────────────
+loadKeys();
+setInterval(loadKeys, 10000); // Refresh every 10 seconds
+</script>
+</body>
+</html>
