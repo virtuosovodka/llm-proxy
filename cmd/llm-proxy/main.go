@@ -382,8 +382,12 @@ func initializeAPIKeyStore(yamlConfig *config.YAMLConfig) providers.APIKeyStore 
 		Logger:    logger,
 	})
 	if err != nil {
-		logger.Error("🔑 API Key Store: Failed to create API key store", "error", err)
-		return nil
+		// Fallback to mock store in dev mode or if DynamoDB is unavailable
+		logger.Warn("🔑 API Key Store: Failed to create DynamoDB store, using in-memory mock for dev/testing",
+			"error", err)
+		mockStore := apikeys.NewMockStore()
+		logger.Info("🔑 API Key Store: Successfully initialized in-memory mock store for development")
+		return mockStore
 	}
 
 	logger.Info("🔑 API Key Store: Successfully initialized API key store")
