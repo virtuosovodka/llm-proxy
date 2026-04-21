@@ -18,7 +18,7 @@ import (
 
 const (
 	// KeyPrefix is the prefix for all internal API keys
-	KeyPrefix = "iw:"
+	KeyPrefix = "my:"
 	// KeyLength is the length of the random part of the key
 	KeyLength = 32
 )
