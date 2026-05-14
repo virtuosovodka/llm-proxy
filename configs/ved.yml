@@ -1,7 +1,7 @@
 # LLM Proxy Configuration
 # This file configures rate limiting, cost tracking, and model-specific settings
 
-# Development configuration
+# VED (Shared development) configuration
 
 enabled: true
 
@@ -22,7 +22,7 @@ features:
           host: "datadog-agent"
           port: "8125"
           namespace: "llm"
-          tags: ["env:dev", "service:llm-proxy"]
+          tags: ["env:ved", "service:llm-proxy"]
           sample_rate: 1.0
   api_key_management:
     enabled: true
