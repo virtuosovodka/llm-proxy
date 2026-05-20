@@ -23,6 +23,9 @@ type AdminKeyStore interface {
 	UpdateKey(ctx context.Context, key string, updates map[string]interface{}) error
 	DeleteKey(ctx context.Context, key string) error
 	ListKeys(ctx context.Context, provider string) ([]*apikeys.APIKey, error)
+	GetKeysByTag(ctx context.Context, tagKey, tagValue string) ([]*apikeys.APIKey, error)
+	UpdateKeysByTag(ctx context.Context, tagKey, tagValue, newActualKey string) (int, error)
+	DeleteKeysByTag(ctx context.Context, tagKey, tagValue string) (int, error)
 }
 
 // Handler owns the HTTP handlers for the admin API endpoints.
@@ -48,6 +51,12 @@ func (h *Handler) RegisterRoutes(router *mux.Router) {
 	router.HandleFunc("/admin/", h.ServeUI).Methods("GET", "HEAD")
 
 	// API endpoints (all require auth via middleware)
+	// Register specific bulk routes first to avoid {id} wildcard matching
+	bulkRouter := router.PathPrefix("/admin/api/keys/bulk").Subrouter()
+	bulkRouter.HandleFunc("/by-tag", h.AuthMiddleware(h.BulkUpdateByTag)).Methods("POST")
+	bulkRouter.HandleFunc("/delete-by-tag", h.AuthMiddleware(h.BulkDeleteByTag)).Methods("POST")
+
+	// General key endpoints
 	router.HandleFunc("/admin/api/keys", h.AuthMiddleware(h.CreateKey)).Methods("POST")
 	router.HandleFunc("/admin/api/keys", h.AuthMiddleware(h.ListKeys)).Methods("GET")
 	router.HandleFunc("/admin/api/keys/{id}", h.AuthMiddleware(h.GetKey)).Methods("GET")
@@ -81,9 +90,9 @@ func (h *Handler) CreateKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate provider
-	validProviders := map[string]bool{"openai": true, "anthropic": true, "gemini": true}
+	validProviders := map[string]bool{"openai": true, "anthropic": true, "gemini": true, "fireworks": true}
 	if !validProviders[req.Provider] {
-		respondError(w, http.StatusBadRequest, "invalid provider (must be openai, anthropic, or gemini)")
+		respondError(w, http.StatusBadRequest, "invalid provider (must be openai, anthropic, gemini, or fireworks)")
 		return
 	}
 
@@ -241,6 +250,50 @@ func (h *Handler) DeleteKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondSuccess(w, "key deleted", nil)
+}
+
+// BulkUpdateByTag handles POST /admin/api/keys/bulk/by-tag
+func (h *Handler) BulkUpdateByTag(w http.ResponseWriter, r *http.Request) {
+	var req BulkUpdateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request: "+err.Error())
+		return
+	}
+
+	if req.TagKey == "" || req.TagValue == "" || req.NewActualKey == "" {
+		respondError(w, http.StatusBadRequest, "tag_key, tag_value, and new_actual_key are required")
+		return
+	}
+
+	count, err := h.store.UpdateKeysByTag(context.Background(), req.TagKey, req.TagValue, req.NewActualKey)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to update keys: "+err.Error())
+		return
+	}
+
+	respondSuccess(w, "keys updated", map[string]int{"updated": count})
+}
+
+// BulkDeleteByTag handles POST /admin/api/keys/bulk/delete-by-tag
+func (h *Handler) BulkDeleteByTag(w http.ResponseWriter, r *http.Request) {
+	var req BulkDeleteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request: "+err.Error())
+		return
+	}
+
+	if req.TagKey == "" || req.TagValue == "" {
+		respondError(w, http.StatusBadRequest, "tag_key and tag_value are required")
+		return
+	}
+
+	count, err := h.store.DeleteKeysByTag(context.Background(), req.TagKey, req.TagValue)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to delete keys: "+err.Error())
+		return
+	}
+
+	respondSuccess(w, "keys deleted", map[string]int{"deleted": count})
 }
 
 // apiKeyToResponse converts an apikeys.APIKey to a KeyResponse.

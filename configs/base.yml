@@ -1001,6 +1001,71 @@ providers:
             input: 0.075
             output: 0.30
 
+  fireworks:
+    enabled: true
+    default_limits:
+      tokens_per_minute: 10_000_000
+      requests_per_minute: 1_000
+      tokens_per_hour: 600_000_000
+      tokens_per_day: 14_400_000_000
+      requests_per_day: 1_440_000
+      burst_tokens: 1_000_000
+      burst_requests: 100
+
+    models:
+      "llama-v3-70b-instruct":
+        enabled: true
+        aliases: ["llama-v3-70b", "llama-70b"]
+        limits:
+          tokens_per_minute: 2_000_000
+          requests_per_minute: 1_000
+          tokens_per_day: 48_000_000
+          requests_per_day: 1_440_000
+          burst_tokens: 200_000
+          burst_requests: 100
+        pricing:
+          input: 0.50
+          output: 0.50
+      "llama-v3-8b-instruct":
+        enabled: true
+        aliases: ["llama-v3-8b", "llama-8b"]
+        limits:
+          tokens_per_minute: 5_000_000
+          requests_per_minute: 1_000
+          tokens_per_day: 120_000_000
+          requests_per_day: 1_440_000
+          burst_tokens: 500_000
+          burst_requests: 100
+        pricing:
+          input: 0.20
+          output: 0.20
+      "mixtral-8x7b-instruct":
+        enabled: true
+        aliases: ["mixtral-8x7b", "mixtral"]
+        limits:
+          tokens_per_minute: 2_000_000
+          requests_per_minute: 1_000
+          tokens_per_day: 48_000_000
+          requests_per_day: 1_440_000
+          burst_tokens: 200_000
+          burst_requests: 100
+        pricing:
+          input: 0.35
+          output: 0.35
+      "qwen2-72b-instruct":
+        enabled: true
+        aliases: ["qwen2-72b", "qwen-72b"]
+        limits:
+          tokens_per_minute: 2_000_000
+          requests_per_minute: 1_000
+          tokens_per_day: 48_000_000
+          requests_per_day: 1_440_000
+          burst_tokens: 200_000
+          burst_requests: 100
+        pricing:
+          input: 0.40
+          output: 0.40
+
 # =============================================================================
 # DEFAULT RATE LIMITS (FALLBACKS)
 # =============================================================================

@@ -51,4 +51,18 @@ type ErrorResponse struct {
 type SuccessResponse struct {
 	Message string      `json:"message"`
 	Key     *KeyResponse `json:"key,omitempty"` // included for create/update
+	Data    interface{} `json:"data,omitempty"` // included for bulk operations
+}
+
+// BulkUpdateRequest is the request body for bulk updating keys by tag.
+type BulkUpdateRequest struct {
+	TagKey       string `json:"tag_key"`
+	TagValue     string `json:"tag_value"`
+	NewActualKey string `json:"new_actual_key"`
+}
+
+// BulkDeleteRequest is the request body for bulk deleting keys by tag.
+type BulkDeleteRequest struct {
+	TagKey   string `json:"tag_key"`
+	TagValue string `json:"tag_value"`
 }

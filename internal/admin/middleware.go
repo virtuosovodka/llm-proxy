@@ -67,13 +67,21 @@ func respondError(w http.ResponseWriter, status int, message string) {
 }
 
 // respondSuccess writes a success response.
-func respondSuccess(w http.ResponseWriter, message string, key *KeyResponse) {
+func respondSuccess(w http.ResponseWriter, message string, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(SuccessResponse{
+	resp := SuccessResponse{
 		Message: message,
-		Key:     key,
-	})
+	}
+	// Handle different data types
+	if data != nil {
+		if key, ok := data.(*KeyResponse); ok {
+			resp.Key = key
+		} else {
+			resp.Data = data
+		}
+	}
+	json.NewEncoder(w).Encode(resp)
 }
 
 // respondJSON writes a JSON response with the given status code.

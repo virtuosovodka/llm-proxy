@@ -26,7 +26,7 @@ features:
           sample_rate: 1.0
   api_key_management:
     enabled: true
-    table_name: "llm-proxy-api-keys--ved"
+    table_name: "llm-proxy-api-keys--students-dev"
     region: "us-west-2"
   rate_limiting:
     enabled: true

@@ -525,6 +525,9 @@ func runServer(yamlConfig *config.YAMLConfig) {
 	geminiProvider := providers.NewGeminiProxy()
 	globalProviderManager.RegisterProvider(geminiProvider)
 
+	fireworksProvider := providers.NewFireworksProxy()
+	globalProviderManager.RegisterProvider(fireworksProvider)
+
 	// Register AWS Bedrock provider
 	bedrockProvider := providers.NewBedrockProxy()
 	globalProviderManager.RegisterProvider(bedrockProvider)

@@ -156,3 +156,57 @@ func (m *MockStore) ValidateAndGetActualKey(ctx context.Context, key string) (st
 
 	return apiKey.ActualKey, apiKey.Provider, nil
 }
+
+// GetKeysByTag retrieves all API keys with a specific tag value
+func (m *MockStore) GetKeysByTag(ctx context.Context, tagKey, tagValue string) ([]*APIKey, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var result []*APIKey
+	for _, key := range m.keys {
+		if key.Tags != nil {
+			if val, ok := key.Tags[tagKey]; ok && val == tagValue {
+				result = append(result, key)
+			}
+		}
+	}
+
+	return result, nil
+}
+
+// UpdateKeysByTag updates all keys with a specific tag to use a new actual key
+func (m *MockStore) UpdateKeysByTag(ctx context.Context, tagKey, tagValue, newActualKey string) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	updated := 0
+	for _, key := range m.keys {
+		if key.Tags != nil {
+			if val, ok := key.Tags[tagKey]; ok && val == tagValue {
+				key.ActualKey = newActualKey
+				key.UpdatedAt = time.Now()
+				updated++
+			}
+		}
+	}
+
+	return updated, nil
+}
+
+// DeleteKeysByTag deletes all keys with a specific tag
+func (m *MockStore) DeleteKeysByTag(ctx context.Context, tagKey, tagValue string) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	deleted := 0
+	for keyID, key := range m.keys {
+		if key.Tags != nil {
+			if val, ok := key.Tags[tagKey]; ok && val == tagValue {
+				delete(m.keys, keyID)
+				deleted++
+			}
+		}
+	}
+
+	return deleted, nil
+}
